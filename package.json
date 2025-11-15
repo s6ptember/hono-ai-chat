@@ -1,0 +1,22 @@
+{
+  "name": "ai-code-review-assistant",
+  "version": "1.0.0",
+  "description": "AI-powered code review assistant using Hono, HTMX, and Alpine.js on Cloudflare Workers",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "cf:dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "groq-sdk": "^0.35.0",
+    "hono": "^4.6.14"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241127.0",
+    "@types/bun": "^1.1.13",
+    "typescript": "^5.7.2",
+    "wrangler": "^3.87.0"
+  }
+}

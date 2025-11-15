@@ -1,0 +1,22 @@
+# Development Environment Variables
+# This file is for local development only
+
+# Required: Groq API Key (free tier available)
+# Get it from: https://console.groq.com/keys
+GROQ_API_KEY=
+
+# Optional: Access token for API authentication
+# ACCESS_TOKEN=
+
+# Optional: Allowed CORS origins
+ALLOWED_ORIGINS=*
+
+# Optional: Rate limiting
+RATE_LIMIT_REQUESTS=20
+RATE_LIMIT_WINDOW=60
+
+# Optional: Maximum code length
+MAX_CODE_LENGTH=10000
+
+# Node environment
+NODE_ENV=development

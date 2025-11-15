@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Code Review Assistant</title>
+    <script src="https://unpkg.com/htmx.org@2.0.3"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'SF Pro Display', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #000000;
+            color: #e8e8e8;
+            min-height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .container {
+            width: 100%;
+            height: 100vh;
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            background: #000000;
+        }
+
+        .header {
+            background: rgba(20, 20, 20, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 20px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-title {
+            font-size: 0.95rem;
+            color: #888;
+            font-weight: 500;
+        }
+
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            padding: 40px 20px;
+            gap: 30px;
+            max-width: 900px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .chat-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .chat-container::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .chat-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 4px;
+        }
+
+        .chat-container::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        .message {
+            display: flex;
+            gap: 15px;
+            animation: fadeIn 0.4s ease-out;
+            align-items: flex-start;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(15px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            flex-direction: row-reverse;
+        }
+
+        .message-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.8rem;
+            color: white;
+            flex-shrink: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .message.assistant .message-avatar {
+            background: linear-gradient(135deg, #12c2e9 0%, #c471ed 50%, #f64f59 100%);
+        }
+
+        .message-content {
+            max-width: 75%;
+            background: rgba(30, 30, 30, 0.6);
+            padding: 16px 20px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            line-height: 1.6;
+            font-size: 0.95rem;
+        }
+
+        .message.user .message-content {
+            background: rgba(102, 126, 234, 0.15);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+        }
+
+        /* Markdown Styles */
+        .message-content strong,
+        .message-content b {
+            font-weight: 700;
+            color: #f0f0f0;
+        }
+
+        .message-content em,
+        .message-content i {
+            font-style: italic;
+            color: #e0e0e0;
+        }
+
+        .message-content h1,
+        .message-content h2,
+        .message-content h3,
+        .message-content h4,
+        .message-content h5,
+        .message-content h6 {
+            font-weight: 700;
+            margin-top: 20px;
+            margin-bottom: 12px;
+            color: #f5f5f5;
+            line-height: 1.3;
+        }
+
+        .message-content h1 { font-size: 1.8rem; }
+        .message-content h2 { font-size: 1.5rem; }
+        .message-content h3 { font-size: 1.25rem; }
+        .message-content h4 { font-size: 1.1rem; }
+        .message-content h5 { font-size: 1rem; }
+        .message-content h6 { font-size: 0.95rem; }
+
+        .message-content h1:first-child,
+        .message-content h2:first-child,
+        .message-content h3:first-child,
+        .message-content h4:first-child,
+        .message-content h5:first-child,
+        .message-content h6:first-child {
+            margin-top: 0;
+        }
+
+        .message-content p {
+            margin-bottom: 12px;
+            line-height: 1.6;
+        }
+
+        .message-content p:last-child {
+            margin-bottom: 0;
+        }
+
+        .message-content ul,
+        .message-content ol {
+            margin: 12px 0;
+            padding-left: 24px;
+        }
+
+        .message-content li {
+            margin-bottom: 8px;
+            line-height: 1.6;
+        }
+
+        .message-content li:last-child {
+            margin-bottom: 0;
+        }
+
+        .message-content ul li {
+            list-style-type: disc;
+        }
+
+        .message-content ol li {
+            list-style-type: decimal;
+        }
+
+        .message-content code {
+            background: rgba(0, 0, 0, 0.4);
+            color: #ff79c6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'SF Mono', 'Monaco', 'Consolas', 'Courier New', monospace;
+            font-size: 0.875rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .message-content pre {
+            margin: 12px 0;
+            overflow-x: auto;
+        }
+
+        .message-content pre code {
+            display: block;
+            background: #1a1a1a;
+            color: #e8e8e8;
+            padding: 16px;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .message-content a {
+            color: #60a5fa;
+            text-decoration: none;
+            border-bottom: 1px solid transparent;
+            transition: border-color 0.2s;
+        }
+
+        .message-content a:hover {
+            border-bottom-color: #60a5fa;
+        }
+
+        .message-content blockquote {
+            border-left: 3px solid rgba(102, 126, 234, 0.5);
+            padding-left: 16px;
+            margin: 12px 0;
+            color: #aaa;
+            font-style: italic;
+        }
+
+        .message-content hr {
+            border: none;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            margin: 20px 0;
+        }
+
+        .message-content table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 12px 0;
+        }
+
+        .message-content th,
+        .message-content td {
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 8px 12px;
+            text-align: left;
+        }
+
+        .message-content th {
+            background: rgba(255, 255, 255, 0.05);
+            font-weight: 600;
+        }
+
+        .code-block {
+            background: #1a1a1a;
+            color: #e8e8e8;
+            padding: 16px;
+            border-radius: 12px;
+            overflow-x: auto;
+            font-family: 'SF Mono', 'Monaco', 'Consolas', 'Courier New', monospace;
+            font-size: 0.875rem;
+            margin: 12px 0;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            line-height: 1.5;
+        }
+
+        .severity-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            letter-spacing: 0.5px;
+        }
+
+        .severity-info {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .severity-warning {
+            background: rgba(251, 191, 36, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(251, 191, 36, 0.3);
+        }
+
+        .severity-critical {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .input-container {
+            padding: 20px 40px 30px;
+            background: rgba(20, 20, 20, 0.95);
+            backdrop-filter: blur(10px);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .input-wrapper {
+            max-width: 900px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .language-select {
+            padding: 10px 14px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 10px;
+            font-size: 0.9rem;
+            background: rgba(30, 30, 30, 0.8);
+            color: #e8e8e8;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 250px;
+        }
+
+        .language-select:focus {
+            outline: none;
+            border-color: #667eea;
+            background: rgba(30, 30, 30, 1);
+        }
+
+        .language-select option {
+            background: #1a1a1a;
+            color: #e8e8e8;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+        }
+
+        textarea {
+            flex: 1;
+            padding: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            font-family: 'SF Mono', 'Monaco', 'Consolas', 'Courier New', monospace;
+            font-size: 0.9rem;
+            resize: vertical;
+            min-height: 120px;
+            transition: all 0.2s;
+            background: rgba(30, 30, 30, 0.8);
+            color: #e8e8e8;
+        }
+
+        textarea::placeholder {
+            color: #666;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            background: rgba(30, 30, 30, 1);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 16px 32px;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            height: fit-content;
+            white-space: nowrap;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.6s linear infinite;
+            vertical-align: middle;
+            margin-left: 8px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: #666;
+            max-width: 600px;
+            margin: auto;
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 24px;
+            opacity: 0.4;
+            stroke: currentColor;
+        }
+
+        .empty-state h3 {
+            font-size: 1.5rem;
+            margin-bottom: 12px;
+            color: #999;
+            font-weight: 600;
+        }
+
+        .empty-state p {
+            font-size: 1rem;
+            color: #666;
+            line-height: 1.6;
+        }
+
+        pre code {
+            display: block;
+            padding: 0;
+            border-radius: 0;
+            overflow-x: auto;
+            background: transparent !important;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                padding: 16px 20px;
+            }
+
+            .logo {
+                font-size: 1.2rem;
+            }
+
+            .header-title {
+                display: none;
+            }
+
+            .chat-container {
+                padding: 20px 15px;
+                gap: 20px;
+            }
+
+            .message-content {
+                max-width: 85%;
+                font-size: 0.9rem;
+            }
+
+            .input-container {
+                padding: 15px 20px 20px;
+            }
+
+            .input-row {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            button {
+                width: 100%;
+            }
+
+            .language-select {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container" x-data="codeReviewApp()">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-content">
+                <div class="logo">◇ CodeReview AI</div>
+                <div class="header-title">Powered by Groq & Hono</div>
+            </div>
+        </div>
+
+        <!-- Chat Messages -->
+        <div class="chat-container" id="chat-messages">
+            <!-- Empty State -->
+            <div class="empty-state" x-show="messages.length === 0">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                </svg>
+                <h3>Ready to review your code</h3>
+                <p>Paste your code below and get instant AI-powered review with detailed suggestions and best practices.</p>
+            </div>
+
+            <!-- Messages -->
+            <template x-for="message in messages" :key="message.id">
+                <div class="message" :class="message.role">
+                    <div class="message-avatar" x-text="message.role === 'user' ? 'You' : 'AI'"></div>
+                    <div class="message-content">
+                        <div x-show="message.severity" class="severity-badge" :class="'severity-' + message.severity" x-text="message.severity"></div>
+                        <div x-html="message.content"></div>
+                    </div>
+                </div>
+            </template>
+
+            <!-- Loading Indicator -->
+            <div class="message assistant" x-show="loading">
+                <div class="message-avatar">AI</div>
+                <div class="message-content">
+                    <span>Analyzing your code</span><div class="loading"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="input-container">
+            <form @submit.prevent="submitCode" class="input-wrapper">
+                <select x-model="language" class="language-select">
+                    <option value="">Select Language (Optional)</option>
+                    <option value="javascript">JavaScript</option>
+                    <option value="typescript">TypeScript</option>
+                    <option value="python">Python</option>
+                    <option value="java">Java</option>
+                    <option value="csharp">C#</option>
+                    <option value="go">Go</option>
+                    <option value="rust">Rust</option>
+                    <option value="php">PHP</option>
+                    <option value="ruby">Ruby</option>
+                    <option value="swift">Swift</option>
+                    <option value="kotlin">Kotlin</option>
+                    <option value="cpp">C++</option>
+                </select>
+                <div class="input-row">
+                    <textarea
+                        x-model="code"
+                        placeholder="Paste your code here..."
+                        :disabled="loading"
+                    ></textarea>
+                    <button type="submit" :disabled="loading || !code.trim()">
+                        <span x-show="!loading">Review Code</span>
+                        <span x-show="loading">Analyzing...</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Configure marked.js with highlight.js integration
+        marked.setOptions({
+            highlight: function(code, lang) {
+                if (lang && hljs.getLanguage(lang)) {
+                    try {
+                        return hljs.highlight(code, { language: lang }).value;
+                    } catch (err) {
+                        console.error('Highlight error:', err);
+                    }
+                }
+                return hljs.highlightAuto(code).value;
+            },
+            breaks: true,
+            gfm: true
+        });
+
+        function codeReviewApp() {
+            return {
+                code: '',
+                language: '',
+                messages: [],
+                loading: false,
+                sessionId: null,
+
+                async submitCode() {
+                    if (!this.code.trim() || this.loading) return;
+
+                    // Add user message
+                    const userMessage = {
+                        id: Date.now(),
+                        role: 'user',
+                        content: '<div class="code-block">' + this.escapeHtml(this.code) + '</div>',
+                    };
+                    this.messages.push(userMessage);
+
+                    // Clear input
+                    const codeToReview = this.code;
+                    const selectedLanguage = this.language;
+                    this.code = '';
+
+                    // Set loading
+                    this.loading = true;
+
+                    // Scroll to bottom
+                    this.$nextTick(() => this.scrollToBottom());
+
+                    try {
+                        // Submit to API
+                        const response = await fetch('/api/chat/review', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                session_id: this.sessionId,
+                                code: codeToReview,
+                                language: selectedLanguage || undefined,
+                            }),
+                        });
+
+                        if (!response.ok) {
+                            const error = await response.json();
+                            throw new Error(error.error?.message || 'Request failed');
+                        }
+
+                        const data = await response.json();
+
+                        // Store session ID
+                        if (data.data.session_id) {
+                            this.sessionId = data.data.session_id;
+                        }
+
+                        // Add assistant message
+                        const assistantMessage = {
+                            id: Date.now() + 1,
+                            role: 'assistant',
+                            content: this.formatReview(data.data.review),
+                            severity: data.data.severity,
+                        };
+                        this.messages.push(assistantMessage);
+
+                        // Scroll to bottom
+                        this.$nextTick(() => {
+                            this.scrollToBottom();
+                            this.highlightCode();
+                        });
+                    } catch (error) {
+                        alert('Error: ' + error.message);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                preprocessMarkdown(text) {
+                    // Fix common markdown issues from AI responses
+                    let processed = text;
+
+                    // Step 0: Fix incorrect closing code fences (```language instead of ```)
+                    // This happens when AI mistakenly adds language to closing fence
+                    processed = processed.replace(/```\w+\s*$/gm, '```');
+
+                    // Step 1: Fix code blocks that are missing language identifiers
+                    // Replace ``` followed by newline with ```language
+                    processed = processed.replace(/```\s*\n([\s\S]*?)```/g, (match, code) => {
+                        const lang = this.detectLanguage(code);
+                        return '```' + lang + '\n' + code + '```';
+                    });
+
+                    // Step 2: Detect code blocks that aren't wrapped in ``` at all
+                    // Look for patterns like:
+                    // - Multiple lines starting with common code keywords (export, function, const, etc.)
+                    // - Lines with consistent indentation
+                    // - Followed by blank lines or markdown headers
+
+                    // Split into lines for processing
+                    const lines = processed.split('\n');
+                    const result = [];
+                    let inCodeBlock = false;
+                    let codeBlockLines = [];
+                    let inMarkdownCodeBlock = false;
+                    let previousLine = '';
+                    let expectingCodeBlock = false;  // Flag for lines after "For example:", etc.
+
+                    for (let i = 0; i < lines.length; i++) {
+                        const line = lines[i];
+                        const trimmed = line.trim();
+
+                        // Track if we're in a markdown code block (```)
+                        if (trimmed.startsWith('```')) {
+                            inMarkdownCodeBlock = !inMarkdownCodeBlock;
+                            result.push(line);
+                            expectingCodeBlock = false;
+                            continue;
+                        }
+
+                        // Skip processing if we're already in a markdown code block
+                        if (inMarkdownCodeBlock) {
+                            result.push(line);
+                            continue;
+                        }
+
+                        // Check if previous line suggests code is coming (e.g., "For example:", "Example:", "Here's")
+                        const prevTrimmed = previousLine.trim();
+                        if (prevTrimmed.match(/\bfor example:$/i) ||
+                            prevTrimmed.match(/\bexample:$/i) ||
+                            prevTrimmed.match(/\bhere'?s\s+.*:$/i) ||
+                            prevTrimmed.match(/\bfollowing.*:$/i) ||
+                            prevTrimmed.match(/\bbelow.*:$/i)) {
+                            expectingCodeBlock = true;
+                        }
+
+                        // Check if this looks like a code line
+                        const isCodeLine = this.looksLikeCode(trimmed);
+                        const isBlankLine = trimmed === '';
+                        const isMarkdownHeading = trimmed.match(/^#{1,6}\s/);
+                        const isMarkdownBold = trimmed.match(/^\*\*[^*]+\*\*:/);
+                        const isListItem = trimmed.match(/^[-*]\s/) || trimmed.match(/^\d+\.\s/);  // Include numbered lists
+                        const isNumberedList = trimmed.match(/^\d+\.\s+[A-Z]/);
+
+                        // Start code block if we're expecting it or if line looks like code
+                        if ((isCodeLine || expectingCodeBlock) && !inCodeBlock &&
+                            !isMarkdownHeading && !isMarkdownBold && !isListItem && !isNumberedList) {
+
+                            if (isCodeLine) {
+                                // Start of a code block
+                                inCodeBlock = true;
+                                codeBlockLines = [line];
+                                expectingCodeBlock = false;
+                            } else if (!isBlankLine) {
+                                // After "For example:", even non-obvious code should be treated as code
+                                expectingCodeBlock = false;
+                            }
+                        } else if (inCodeBlock) {
+                            if (isBlankLine || (isCodeLine && !isListItem && !isNumberedList)) {
+                                // Continue code block (but not if it's a list item)
+                                codeBlockLines.push(line);
+                            } else if (isMarkdownHeading || isMarkdownBold || isListItem || isNumberedList ||
+                                       (trimmed.length > 0 && !isCodeLine)) {
+                                // End of code block
+                                if (codeBlockLines.length > 1) {
+                                    // Wrap the code block in ```
+                                    const codeContent = codeBlockLines.join('\n').trim();
+                                    const lang = this.detectLanguage(codeContent);
+                                    result.push('```' + lang);
+                                    result.push(codeContent);
+                                    result.push('```');
+                                } else {
+                                    result.push(...codeBlockLines);
+                                }
+                                inCodeBlock = false;
+                                codeBlockLines = [];
+                                result.push(line);
+                            } else {
+                                codeBlockLines.push(line);
+                            }
+                        } else {
+                            result.push(line);
+                        }
+
+                        // Track previous line for context
+                        if (!isBlankLine) {
+                            previousLine = line;
+                        }
+                    }
+
+                    // Handle any remaining code block at the end
+                    if (inCodeBlock && codeBlockLines.length > 1) {
+                        const codeContent = codeBlockLines.join('\n').trim();
+                        const lang = this.detectLanguage(codeContent);
+                        result.push('```' + lang);
+                        result.push(codeContent);
+                        result.push('```');
+                    } else if (codeBlockLines.length > 0) {
+                        result.push(...codeBlockLines);
+                    }
+
+                    return result.join('\n');
+                },
+
+                looksLikeCode(line) {
+                    // Check if a line looks like code
+                    if (!line || line.length === 0) return false;
+
+                    // FIRST: Check for things that are definitely NOT code
+                    const notCodePatterns = [
+                        /^\d+\.\s+[A-Z]/,  // Numbered list items (e.g., "1. Add", "2. Validate")
+                        /^[A-Z][a-z]+.*[a-z]{3,}/,  // Sentences starting with capital letter and multiple words
+                    ];
+
+                    if (notCodePatterns.some(pattern => pattern.test(line))) {
+                        return false;
+                    }
+
+                    // If line is too long and contains many regular words, it's likely prose, not code
+                    if (line.length > 80) {
+                        const words = line.split(/\s+/);
+                        const commonWords = ['the', 'to', 'is', 'will', 'this', 'that', 'prevent', 'ensure',
+                                            'add', 'use', 'from', 'with', 'for', 'and', 'or', 'not', 'before',
+                                            'after', 'during', 'similar', 'provide', 'handle', 'improve'];
+                        const matchCount = words.filter(w =>
+                            commonWords.includes(w.toLowerCase().replace(/[^\w]/g, ''))
+                        ).length;
+                        if (matchCount >= 3) {
+                            return false;  // Too many common English words, likely prose
+                        }
+                    }
+
+                    // Common code patterns
+                    const codePatterns = [
+                        /^(export|import|const|let|var|function|class|interface|type|enum|async|await)\s/,
+                        /^(public|private|protected|static)\s/,
+                        /^(if|else|while|for|switch|case|return|throw|try|catch|finally)\s*[\(\{]/,
+                        /^(try|catch|finally)\s*\{/,  // try/catch/finally blocks
+                        /^\s*[\{\}]\s*$/,  // Just braces
+                        /^\s*\}\s*(catch|finally|else)/,  // } catch, } finally, } else
+                        /^[a-zA-Z_$][a-zA-Z0-9_$]*\s*\([^)]*\)\s*[\{:;]/,  // Function call/definition
+                        /^[a-zA-Z_$][a-zA-Z0-9_$]*\.[a-zA-Z_$][a-zA-Z0-9_$]*\s*\(/,  // Method calls like logger.info(
+                        /^[a-zA-Z_$][a-zA-Z0-9_$]*\.[a-zA-Z_$]/,  // Object property access
+                        /=>/,  // Arrow function
+                        /^def\s|^class\s.*:/,  // Python
+                        /^\s*(\/\/|\/\*|\*)/,  // Comments
+                        /^return\s+/,  // Return statements
+                        /^throw\s+/,  // Throw statements
+                    ];
+
+                    return codePatterns.some(pattern => pattern.test(line));
+                },
+
+                detectLanguage(code) {
+                    // Simple language detection based on common patterns
+                    if (code.includes('function') || code.includes('const ') || code.includes('let ') ||
+                        code.includes('var ') || code.includes('=>')) {
+                        if (code.includes(': ') && (code.includes('interface') || code.includes('type ') ||
+                            code.includes('export ') || code.includes('import '))) {
+                            return 'typescript';
+                        }
+                        return 'javascript';
+                    }
+                    if (code.includes('def ') || code.includes('import ') || code.includes('class ') && code.includes('self')) {
+                        return 'python';
+                    }
+                    if (code.includes('package ') || code.includes('public class ') || code.includes('private ')) {
+                        return 'java';
+                    }
+                    if (code.includes('<?php')) {
+                        return 'php';
+                    }
+                    if (code.includes('func ') || code.includes('package main')) {
+                        return 'go';
+                    }
+                    if (code.includes('fn ') || code.includes('let mut ')) {
+                        return 'rust';
+                    }
+                    // Default to typescript for this project
+                    return 'typescript';
+                },
+
+                formatReview(text) {
+                    // Parse markdown to HTML using marked.js
+                    try {
+                        // Preprocess the markdown to fix common issues
+                        const preprocessed = this.preprocessMarkdown(text);
+                        return marked.parse(preprocessed);
+                    } catch (err) {
+                        console.error('Markdown parsing error:', err);
+                        // Fallback to simple text formatting
+                        return this.escapeHtml(text).split('\\n').join('<br>');
+                    }
+                },
+
+                escapeHtml(text) {
+                    var div = document.createElement('div');
+                    div.textContent = text;
+                    return div.innerHTML;
+                },
+
+                scrollToBottom() {
+                    const container = document.getElementById('chat-messages');
+                    container.scrollTop = container.scrollHeight;
+                },
+
+                highlightCode() {
+                    // Only highlight code blocks that haven't been highlighted yet
+                    document.querySelectorAll('pre code:not(.hljs)').forEach((block) => {
+                        hljs.highlightElement(block);
+                    });
+                }
+            }
+        }
+    </script>
+</body>
+</html>

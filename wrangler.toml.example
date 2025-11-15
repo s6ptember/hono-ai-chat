@@ -1,0 +1,25 @@
+name = "ai-code-review-assistant"
+main = "src/worker.ts"
+
+compatibility_date = "2025-11-11"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+NODE_ENV = "production"
+ALLOWED_ORIGINS = "*"
+RATE_LIMIT_REQUESTS = "20"
+RATE_LIMIT_WINDOW = "60"
+MAX_CODE_LENGTH = "10000"
+
+# KV Namespace for session storage
+# After running: wrangler kv:namespace create SESSIONS
+# You'll get an ID like: abc123def456789
+# Add it here:
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "abc123def456789"  # Replace with your actual KV namespace ID
+
+# Secrets (managed via: wrangler secret put <KEY>)
+# NEVER put actual secrets here!
+# - GROQ_API_KEY: Your Groq API key
+# - ACCESS_TOKEN: Optional API authentication token

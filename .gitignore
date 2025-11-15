@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+.env
+*.log
+.DS_Store
+
+# Cloudflare config with sensitive data
+wrangler.toml
